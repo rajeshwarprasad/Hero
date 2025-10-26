@@ -1,0 +1,43 @@
+import boto3
+from datetime import datetime, timezone, timedelta
+
+def delete_old_s3_objects(bucket_name, days_old=30):
+    """
+    Deletes objects older than 'days_old' days from the specified S3 bucket.
+    Prints names of deleted objects for logging.
+    """
+    s3 = boto3.client('s3')
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
+
+    print(f"Scanning bucket: {bucket_name}")
+    print(f"Deleting objects older than: {cutoff_date}")
+
+    # Use paginator for large buckets
+    paginator = s3.get_paginator('list_objects_v2')
+    deleted_files = []
+
+    for page in paginator.paginate(Bucket=bucket_name):
+        if 'Contents' not in page:
+            continue
+
+        for obj in page['Contents']:
+            key = obj['Key']
+            last_modified = obj['LastModified']
+
+            if last_modified < cutoff_date:
+                s3.delete_object(Bucket=bucket_name, Key=key)
+                deleted_files.append(key)
+                print(f"Deleted: {key}")
+
+    if not deleted_files:
+        print("No objects older than 30 days were found.")
+    else:
+        print(f"\nTotal deleted objects: {len(deleted_files)}")
+
+def lambda_handler(event, context):
+    bucket_name = "rajeshwar-orignal-bucket"  # <-- replace with your bucket name
+    delete_old_s3_objects(bucket_name, days_old=30)
+    return {
+        'statusCode': 200,
+        'body': f"Cleanup complete for bucket: {bucket_name}"
+    }
