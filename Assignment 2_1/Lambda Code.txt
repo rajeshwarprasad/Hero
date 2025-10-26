@@ -1,0 +1,54 @@
+import boto3
+import os
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+
+    started_instances = []
+    stopped_instances = []
+
+    # --- Find instances with the "Auto-Start" tag ---
+    auto_start_instances = ec2.describe_instances(
+        Filters=[
+            {'Name': 'tag:Auto-Start', 'Values': ['Action']},
+            {'Name': 'instance-state-name', 'Values': ['stopped']}
+        ]
+    )
+
+    for reservation in auto_start_instances['Reservations']:
+        for instance in reservation['Instances']:
+            instance_id = instance['InstanceId']
+            started_instances.append(instance_id)
+
+    if started_instances:
+        ec2.start_instances(InstanceIds=started_instances)
+        print(f"Started instances: {started_instances}")
+    else:
+        print("No instances to start.")
+
+    # --- Find instances with the "Auto-Stop" tag ---
+    auto_stop_instances = ec2.describe_instances(
+        Filters=[
+            {'Name': 'tag:Auto-Stop', 'Values': ['Action']},
+            {'Name': 'instance-state-name', 'Values': ['running']}
+        ]
+    )
+
+    for reservation in auto_stop_instances['Reservations']:
+        for instance in reservation['Instances']:
+            instance_id = instance['InstanceId']
+            stopped_instances.append(instance_id)
+
+    if stopped_instances:
+        ec2.stop_instances(InstanceIds=stopped_instances)
+        print(f"Stopped instances: {stopped_instances}")
+    else:
+        print("No instances to stop.")
+
+    return {
+        'statusCode': 200,
+        'body': {
+            'Started': started_instances,
+            'Stopped': stopped_instances
+        }
+    }
